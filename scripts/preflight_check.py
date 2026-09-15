@@ -49,6 +49,7 @@ LEGACY_MODELS = [
     "gemini-3.1-flash-live-preview",
     "gemini-2.5-flash-native-audio-preview-12-2025",
     "gemini-live-2.5-flash-preview",
+    "gemini-2.5-flash-live",
     "gemini-2.0-flash-live-001",
 ]
 
