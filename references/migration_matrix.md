@@ -22,6 +22,8 @@ Reference comparison between `gemini-3.1-flash-live-preview`, `gemini-3.8-live`,
 | **Proactive Audio** | Not supported | Permanently enabled | Permanently enabled |
 | **Affective Dialogue** | Deprecated / optional | **Removed** (setting causes error) | **Removed** (setting causes error) |
 | **Default Turn Coverage** | Audio activity & video | `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` | `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO` |
+| **Response Modality** | `TEXT` or `AUDIO` | **`AUDIO` only** (`TEXT` causes Error 1007) | **`AUDIO` only** (`TEXT` causes Error 1007) |
+| **Text Transcription** | Optional | **Required for text display** (`outputAudioTranscription`) | **Required for text display** (`outputAudioTranscription`) |
 
 ---
 
@@ -64,6 +66,14 @@ Avoid these configurations to prevent runtime errors:
 8. **Unchecked Connection Handshake**:
    * Behavior: Client reports connected while the server sent an error frame or rejected setup.
    * Fix: Assert `setupComplete` in initial response from `recv()` and raise exception on error. Handle `error` and `goaway` frames in the receive loop.
+
+9. **`responseModalities: ["TEXT"]` on 3.8 models**:
+   * Error: `1007 Invalid Argument: The requested combination of response modalities (TEXT) is not supported by the model.`
+   * Fix: Set `responseModalities: ["AUDIO"]`. Enable `outputAudioTranscription: {}` and `inputAudioTranscription: {}` if text transcripts are needed.
+
+10. **Hanging Audio Capture Worker (`send_audio` hang)**:
+   * Behavior: When `receive_responses` terminates, `send_audio` continues capturing microphone audio indefinitely, displaying `Capturing speech...`.
+   * Fix: Set `is_running = False` in the `finally` block of `receive_responses` and cancel pending tasks.
 
 ---
 

@@ -34,6 +34,8 @@ Follow these principles during every migration:
   - When `GEMINI_API_KEY` is present, connect to Google AI Studio with `models/gemini-3.8-live`.
   - When `GEMINI_API_KEY` is absent, connect to Vertex AI and temporarily map `gemini-3.8-live` to `gemini-live-2.5-flash-native-audio` until 3.8 arrives on Vertex.
   - Once Vertex publishes `gemini-3.8-live`, the client routes directly to `gemini-3.8-live` on Vertex without further refactoring.
+- **Native Audio Modality Constraint (Error 1007)**: `gemini-3.8-live` and `gemini-3.8-live-extended-thinking` are native audio models and strictly require `responseModalities: ["AUDIO"]`. Requesting `responseModalities: ["TEXT"]` causes error 1007: `The requested combination of response modalities (TEXT) is not supported by the model`. Applications requiring text transcripts for UI or terminal display must configure `inputAudioTranscription: {}` and `outputAudioTranscription: {}` in the `setup` payload.
+- **Hanging Audio Capture Loop**: Bidirectional audio streaming loops (`send_audio` and `receive_responses`) must link lifecycle state. When `receive_responses` terminates (due to error, `turnComplete`, or connection close), it must set `is_running = False` in a `finally` block to terminate the mic capture worker; otherwise, the capture loop hangs in `Capturing speech...` indefinitely.
 - **Silent Error Suppression**: WebSocket clients must assert `setupComplete` in the initial connection handshake. Dropping or ignoring initial responses allows the client to claim connection even when the server rejected the model or setup. The receive loop must also handle server `error` and `goaway` frames.
 - **Regional Model Availability**: `gemini-3.8-live-extended-thinking` may be published in zero locations for a given project. The preflight check sweeps all discovered locations. Never refactor code for an unreachable model.
 - **Rejected Placeholder API Keys**: Shell environments often contain non-functional or expired `GEMINI_API_KEY` placeholders. The preflight validates the key against the API and falls back to Vertex Application Default Credentials (ADC).
@@ -137,22 +139,28 @@ Execute refactoring according to the selected model path:
 #### Path A: `gemini-3.8-live`
 1. Update model identifier to `gemini-3.8-live` for Google AI Studio (`GEMINI_API_KEY`).
 2. Preserve surface fallback mapping for Vertex AI (`gemini-live-2.5-flash-native-audio`) when no API key is provided.
-3. Remove `thinking_config` and `thinking_level`.
-4. Remove `enable_affective_dialog` and `proactive_audio: false`.
-5. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio` (`{"mimeType": "audio/pcm;rate=16000", "data": ...}`).
-6. Assert `setupComplete` in connection setup and raise server error details on failure.
-7. Add error and `goaway` frame handling to receive loops.
-8. If tools are slow (>500ms), set `behavior: "NON_BLOCKING"`.
-9. Preserve existing `turnComplete` receive loop logic.
+3. Configure `responseModalities: ["AUDIO"]` on `generationConfig`. Never set `["TEXT"]` (Error 1007).
+4. Add `inputAudioTranscription: {}` and `outputAudioTranscription: {}` to `setup` payload to receive text transcripts of user and model speech.
+5. Remove `thinking_config` and `thinking_level`.
+6. Remove `enable_affective_dialog` and `proactive_audio: false`.
+7. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio` (`{"mimeType": "audio/pcm;rate=16000", "data": ...}`).
+8. Assert `setupComplete` in connection setup and raise server error details on failure.
+9. Add error and `goaway` frame handling to receive loops.
+10. Ensure audio capture workers (`send_audio`) terminate when receive loops exit (`finally: is_running = False`).
+11. If tools are slow (>500ms), set `behavior: "NON_BLOCKING"`.
+12. Preserve existing `turnComplete` receive loop logic.
 
 #### Path B: `gemini-3.8-live-extended-thinking`
 1. Update model identifier to `gemini-3.8-live-extended-thinking` (verify regional availability first).
-2. Set `thinking_level` to `"low"`, `"medium"`, or `"high"`. Remove `"minimal"`.
-3. Set `behavior: "NON_BLOCKING"` on all tool declarations.
-4. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio`.
-5. Assert `setupComplete` in connection setup and raise server error details on failure.
-6. Add error and `goaway` frame handling to receive loops.
-7. Refactor receive loops to inspect `interaction_status`:
+2. Configure `responseModalities: ["AUDIO"]` on `generationConfig`. Never set `["TEXT"]` (Error 1007).
+3. Add `inputAudioTranscription: {}` and `outputAudioTranscription: {}` to `setup` payload.
+4. Set `thinking_level` to `"low"`, `"medium"`, or `"high"`. Remove `"minimal"`.
+5. Set `behavior: "NON_BLOCKING"` on all tool declarations.
+6. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio`.
+7. Assert `setupComplete` in connection setup and raise server error details on failure.
+8. Add error and `goaway` frame handling to receive loops.
+9. Ensure audio capture workers (`send_audio`) terminate when receive loops exit (`finally: is_running = False`).
+10. Refactor receive loops to inspect `interaction_status`:
    - Keep loop active when `turnComplete: true` and `status == "IN_PROGRESS"`.
    - Transition to idle only when `status == "IDLE"`.
    - Route conversational filler audio to the playback queue.

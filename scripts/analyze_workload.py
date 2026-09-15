@@ -57,6 +57,10 @@ PATTERNS = {
         r"""proactive_audio['"]?\s*[:=]\s*False|proactiveAudio['"]?\s*[:=]\s*false""",
         re.MULTILINE,
     ),
+    "text_modality": re.compile(
+        r"""(responseModalities['"]?\s*[:=]\s*\[\s*['"]TEXT['"]\s*\]|modalities\s*=\s*\[\s*['"]TEXT['"]\s*\])""",
+        re.MULTILINE,
+    ),
 }
 
 
@@ -85,6 +89,7 @@ def scan_file(file_path: Path) -> dict[str, Any]:
         "has_proactive_audio_false": bool(
             PATTERNS["proactive_audio_false"].search(content)
         ),
+        "has_text_modality": bool(PATTERNS["text_modality"].search(content)),
     }
     return findings
 
@@ -121,6 +126,7 @@ def analyze_directory(root_path: Path) -> dict[str, Any]:
     uses_thinking = any(r["has_thinking_config"] for r in results)
     uses_tools = any(r["has_tools"] for r in results)
     tracks_interaction_status = any(r["tracks_interaction_status"] for r in results)
+    has_text_modality = any(r.get("has_text_modality") for r in results)
 
     recommended_model = "gemini-3.8-live"
     recommendation_reason = (
@@ -143,6 +149,7 @@ def analyze_directory(root_path: Path) -> dict[str, Any]:
             "uses_thinking": uses_thinking,
             "uses_tools": uses_tools,
             "tracks_interaction_status": tracks_interaction_status,
+            "has_text_modality": has_text_modality,
             "recommended_model": recommended_model,
             "recommendation_reason": recommendation_reason,
         },

@@ -170,6 +170,13 @@ def evaluate_gates(
                 warnings.append(
                     f"Contract: remove thinking_config when migrating to gemini-3.8-live in {f.get('file')}."
                 )
+            if f.get("has_text_modality"):
+                warnings.append(
+                    f"Contract: {f.get('file')} configures responseModalities: ['TEXT']. "
+                    "Gemini 3.8 Live models are native audio models and strictly require responseModalities: ['AUDIO']. "
+                    "Setting ['TEXT'] causes error 1007. Configure ['AUDIO'] and enable inputAudioTranscription "
+                    "and outputAudioTranscription."
+                )
 
     passed = len(blockers) == 0
     return GateVerdict(
