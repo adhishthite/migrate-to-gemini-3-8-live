@@ -351,7 +351,13 @@ def probe_aistudio_model(api_key: str, model: str) -> ModelProbe:
     url = f"https://{AISTUDIO_HOST}/v1beta/models/{model}?key={api_key}"
     status, body = _http_get(url, {})
     if status == 200:
-        return ModelProbe(model, "aistudio", True, "listed via v1beta/models")
+        return ModelProbe(
+            model,
+            "aistudio",
+            True,
+            "listed via v1beta/models",
+            available_in=["global"],
+        )
     if status == 404:
         return ModelProbe(model, "aistudio", False, "404 not found for this API key")
     if status in (401, 403):

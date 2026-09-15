@@ -29,6 +29,12 @@ Follow these principles during every migration:
 ## Gotchas
 
 - **The `handleTurn` Truncation Trap**: In `gemini-3.8-live-extended-thinking`, `turnComplete: true` is emitted on conversational filler utterances while `interaction_status` is `IN_PROGRESS`. Client loops that treat `turnComplete` as idle will disconnect or reset state prematurely. The conversation truncates silently without an error.
+- **Deprecated Audio Payload Schema**: `realtimeInput.mediaChunks` is deprecated and unsupported on newer Live API endpoints and 3.8 models. Clients must send `realtimeInput.audio`: `{"mimeType": "audio/pcm;rate=16000", "data": "<base64_data>"}`.
+- **Transient Vertex Deployment Edge Case**: `gemini-3.8-live` is currently available on Google AI Studio (`GEMINI_API_KEY`). On Vertex AI (`LlmBidiService`), deployment of `gemini-3.8-live` under `publishers/google/models/` is pending rollout and currently returns `1008 Publisher model was not found`. The skill handles this transient condition by implementing a **dual-surface bridge**:
+  - When `GEMINI_API_KEY` is present, connect to Google AI Studio with `models/gemini-3.8-live`.
+  - When `GEMINI_API_KEY` is absent, connect to Vertex AI and temporarily map `gemini-3.8-live` to `gemini-live-2.5-flash-native-audio` until 3.8 arrives on Vertex.
+  - Once Vertex publishes `gemini-3.8-live`, the client routes directly to `gemini-3.8-live` on Vertex without further refactoring.
+- **Silent Error Suppression**: WebSocket clients must assert `setupComplete` in the initial connection handshake. Dropping or ignoring initial responses allows the client to claim connection even when the server rejected the model or setup. The receive loop must also handle server `error` and `goaway` frames.
 - **Regional Model Availability**: `gemini-3.8-live-extended-thinking` may be published in zero locations for a given project. The preflight check sweeps all discovered locations. Never refactor code for an unreachable model.
 - **Rejected Placeholder API Keys**: Shell environments often contain non-functional or expired `GEMINI_API_KEY` placeholders. The preflight validates the key against the API and falls back to Vertex Application Default Credentials (ADC).
 - **Hard Configuration Errors**:
@@ -129,17 +135,24 @@ Call `ask_question` for developer approval:
 Execute refactoring according to the selected model path:
 
 #### Path A: `gemini-3.8-live`
-1. Update model identifier to `gemini-3.8-live`.
-2. Remove `thinking_config` and `thinking_level`.
-3. Remove `enable_affective_dialog` and `proactive_audio: false`.
-4. If tools are slow (>500ms), set `behavior: "NON_BLOCKING"`.
-5. Preserve existing `turnComplete` receive loop logic.
+1. Update model identifier to `gemini-3.8-live` for Google AI Studio (`GEMINI_API_KEY`).
+2. Preserve surface fallback mapping for Vertex AI (`gemini-live-2.5-flash-native-audio`) when no API key is provided.
+3. Remove `thinking_config` and `thinking_level`.
+4. Remove `enable_affective_dialog` and `proactive_audio: false`.
+5. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio` (`{"mimeType": "audio/pcm;rate=16000", "data": ...}`).
+6. Assert `setupComplete` in connection setup and raise server error details on failure.
+7. Add error and `goaway` frame handling to receive loops.
+8. If tools are slow (>500ms), set `behavior: "NON_BLOCKING"`.
+9. Preserve existing `turnComplete` receive loop logic.
 
 #### Path B: `gemini-3.8-live-extended-thinking`
-1. Update model identifier to `gemini-3.8-live-extended-thinking`.
+1. Update model identifier to `gemini-3.8-live-extended-thinking` (verify regional availability first).
 2. Set `thinking_level` to `"low"`, `"medium"`, or `"high"`. Remove `"minimal"`.
 3. Set `behavior: "NON_BLOCKING"` on all tool declarations.
-4. Refactor receive loops to inspect `interaction_status`:
+4. Update realtime audio streaming schema: replace `realtimeInput.mediaChunks` with `realtimeInput.audio`.
+5. Assert `setupComplete` in connection setup and raise server error details on failure.
+6. Add error and `goaway` frame handling to receive loops.
+7. Refactor receive loops to inspect `interaction_status`:
    - Keep loop active when `turnComplete: true` and `status == "IN_PROGRESS"`.
    - Transition to idle only when `status == "IDLE"`.
    - Route conversational filler audio to the playback queue.

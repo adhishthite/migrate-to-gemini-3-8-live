@@ -49,6 +49,22 @@ Avoid these configurations to prevent runtime errors:
    * Error: `400 Invalid Argument: Unknown field enable_affective_dialog.`
    * Fix: Delete the field from setup payloads.
 
+6. **`realtimeInput.mediaChunks` on modern endpoints**:
+   * Error: Audio silently dropped or `400 Invalid Argument: realtime_input.media_chunks is deprecated. Use audio, video, or text instead.`
+   * Fix: Send `realtimeInput.audio: {"mimeType": "audio/pcm;rate=16000", "data": "<base64_data>"}`.
+
+7. **`gemini-3.8-live` on Vertex AI `LlmBidiService` (Transient Condition)**:
+   * Error: `1008 Publisher model was not found.`
+   * Context: `gemini-3.8-live` is currently available on Google AI Studio (`GEMINI_API_KEY`). Vertex AI deployment is rolling out.
+   * Fix: Implement a dual-surface bridge:
+     - Use `models/gemini-3.8-live` on AI Studio when `GEMINI_API_KEY` is present.
+     - Temporarily map to `gemini-live-2.5-flash-native-audio` on Vertex AI when running via ADC / service account until 3.8 is published on Vertex.
+     - Once published on Vertex, the client automatically resolves `gemini-3.8-live` on Vertex without additional code changes.
+
+8. **Unchecked Connection Handshake**:
+   * Behavior: Client reports connected while the server sent an error frame or rejected setup.
+   * Fix: Assert `setupComplete` in initial response from `recv()` and raise exception on error. Handle `error` and `goaway` frames in the receive loop.
+
 ---
 
 ## 3. Event Handling Patterns

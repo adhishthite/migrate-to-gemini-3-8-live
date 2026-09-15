@@ -62,18 +62,28 @@ def evaluate_gates(
 
         # --- GATE 2: Regional Model Reachability Gate ---
         # Check target model availability in discovered locations
-        model_probes = preflight_data.get("target_model_probes", [])
+        model_probes = preflight_data.get(
+            "target_model_probes"
+        ) or preflight_data.get("model_probes", [])
         avail_map = {}
+        surface_map: dict[str, list[str]] = {}
         for mp in model_probes:
-            m_id = mp.get("model_id", "")
+            m_id = mp.get("model_id") or mp.get("model", "")
+            surf = mp.get("surface", "unknown")
+            is_vis = mp.get("visible", False)
             avail_in = mp.get("available_in", [])
-            avail_map[m_id] = len(avail_in)
+            if is_vis:
+                surface_map.setdefault(m_id, []).append(surf)
+            count = len(avail_in) if avail_in else (1 if is_vis else 0)
+            avail_map[m_id] = avail_map.get(m_id, 0) + count
 
         count_38_live = avail_map.get("gemini-3.8-live", 0)
         count_38_ext = avail_map.get("gemini-3.8-live-extended-thinking", 0)
+        surfaces_38_live = surface_map.get("gemini-3.8-live", [])
 
         notes.append(
-            f"Model availability: gemini-3.8-live in {count_38_live} locations; extended-thinking in {count_38_ext} locations."
+            f"Model availability: gemini-3.8-live in {count_38_live} locations (surfaces: {surfaces_38_live or 'none'}); "
+            f"extended-thinking in {count_38_ext} locations."
         )
 
         # If user/workload requests extended thinking but it is in 0 locations:
@@ -88,18 +98,26 @@ def evaluate_gates(
             )
             target_model = "gemini-3.8-live"
 
-        if (
-            target_model == "gemini-3.8-live"
-            and count_38_live == 0
-            and tier != "AUTH_ONLY"
-        ):
-            blockers.append(
-                "UNREACHABLE_MODEL_BLOCKER: 'gemini-3.8-live' is available in 0 locations for this project."
-            )
-            blocker_prompt = (
-                "Model 'gemini-3.8-live' is not available in any locations for this project. "
-                "Please verify project enablement or contact your Google Cloud representative."
-            )
+        # Transient Edge Case: gemini-3.8-live is available on AI Studio via GEMINI_API_KEY
+        # but pending publication under Vertex AI publishers/google/models/.
+        if target_model == "gemini-3.8-live":
+            if count_38_live == 0:
+                blockers.append(
+                    "UNREACHABLE_MODEL_BLOCKER: 'gemini-3.8-live' is not available on any credentialed surface. "
+                    "Supply a valid GEMINI_API_KEY for Google AI Studio, or wait for Vertex AI publication."
+                )
+                blocker_prompt = (
+                    "Model 'gemini-3.8-live' is not available on any credentialed surface. "
+                    "Please supply a valid GEMINI_API_KEY for Google AI Studio (temporary until published on Vertex), "
+                    "or verify Vertex AI project enablement."
+                )
+            elif "aistudio" in surfaces_38_live and "vertex" not in surfaces_38_live:
+                warnings.append(
+                    "TRANSIENT_VERTEX_AVAILABILITY_WARNING: 'gemini-3.8-live' is available on Google AI Studio "
+                    "via GEMINI_API_KEY, but is pending publication on Vertex AI. The migration will configure a "
+                    "dual-surface bridge: routing to gemini-3.8-live on AI Studio when GEMINI_API_KEY is present, "
+                    "with fallback to gemini-live-2.5-flash-native-audio on Vertex AI until 3.8 arrives on Vertex."
+                )
 
     # --- GATE 3: Event-Loop Truncation Gate ---
     if event_loop_data:
