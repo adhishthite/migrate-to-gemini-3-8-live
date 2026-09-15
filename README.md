@@ -1,6 +1,8 @@
 # Gemini 3.8 Live Migration Toolkit
 
-[![skills.sh](https://skills.sh/b/adhishthite/migrate-to-gemini-3-8-live)](https://skills.sh/adhishthite/migrate-to-gemini-3-8-live)
+[![skills.sh](https://img.shields.io/badge/skills.sh-gemini--3.8--live-black?logo=vercel)](https://skills.sh)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-v1.0-orange)](https://agentskills.io)
 
 Safely migrate your real-time voice agents from `gemini-3.1-flash-live-preview` to `gemini-3.8-live` or `gemini-3.8-live-extended-thinking` without breaking production.
 
