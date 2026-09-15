@@ -1,0 +1,12 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Gemini 3.8 Live Migration Toolkit",
+      "description": "Skills for migrating and optimizing Gemini Live API real-time voice agents on Google Cloud.",
+      "skills": [
+        "migrate-to-gemini-3-8-live"
+      ]
+    }
+  ]
+}
